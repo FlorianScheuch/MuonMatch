@@ -1,0 +1,346 @@
+// -*- C++ -*-
+//
+// Package:    MuonMatch
+// Class:      MuonMatch
+// 
+/**\class MuonMatch MuonMatch.cc L1Analysis/MuonMatch/src/MuonMatch.cc
+
+ Description: [one line class summary]
+
+ Implementation:
+     [Notes on implementation]
+*/
+//
+// Original Author:  Florian Scheuch
+//         Created:  Thu Oct 17 10:45:56 CEST 2013
+// $Id$
+//
+//
+
+
+// system include files
+#include <memory>
+
+// user include files
+#include "CommonTools/UtilAlgos/interface/TFileService.h"
+#include "CommonTools/UtilAlgos/interface/PhysObjectMatcher.h"
+
+#include "FWCore/Framework/interface/Frameworkfwd.h"
+#include "FWCore/Framework/interface/EDAnalyzer.h"
+#include "FWCore/Framework/interface/Event.h"
+#include "FWCore/Framework/interface/MakerMacros.h"
+#include "FWCore/ParameterSet/interface/ParameterSet.h"
+#include "FWCore/ServiceRegistry/interface/Service.h"
+#include "FWCore/ParameterSet/interface/ParameterSet.h"
+#include "FWCore/MessageLogger/interface/MessageLogger.h"
+
+#include "DataFormats/MuonReco/interface/Muon.h"
+#include "DataFormats/MuonReco/interface/MuonFwd.h"
+#include "DataFormats/Candidate/interface/CandMatchMap.h"
+
+#include "DataFormats/JetReco/interface/Jet.h"
+#include "DataFormats/JetReco/interface/GenJet.h"
+#include "DataFormats/JetReco/interface/PFJet.h"
+#include "DataFormats/HepMCCandidate/interface/GenParticle.h"
+#include "DataFormats/Math/interface/LorentzVector.h"
+
+#include "SimDataFormats/GeneratorProducts/interface/HepMCProduct.h"
+#include "SimDataFormats/Track/interface/SimTrack.h"
+#include "SimDataFormats/TrackingHit/interface/PSimHit.h"
+#include "TMath.h"
+#include "TH1D.h"
+
+//Include Muon Propagator
+#include "MuonAnalysis/MuonAssociators/interface/PropagateToMuon.h"
+//
+// class declaration
+//
+
+class MuonMatch : public edm::EDAnalyzer {
+   public:
+      explicit MuonMatch(const edm::ParameterSet&);
+      ~MuonMatch();
+
+      static void fillDescriptions(edm::ConfigurationDescriptions& descriptions);
+
+
+   private:
+      virtual void beginJob() ;
+      virtual void analyze(const edm::Event&, const edm::EventSetup&);
+      virtual void endJob() ;
+
+      virtual void beginRun(edm::Run const&, edm::EventSetup const&);
+      virtual void endRun(edm::Run const&, edm::EventSetup const&);
+      virtual void beginLuminosityBlock(edm::LuminosityBlock const&, edm::EventSetup const&);
+      virtual void endLuminosityBlock(edm::LuminosityBlock const&, edm::EventSetup const&);
+      virtual bool equalsGenParticles(reco::GenParticle gp1, reco::GenParticle gp2);
+      virtual void defineNumberOfMuonGhosts(edm::Handle<edm::View<reco::Muon>> muonHandle, edm::Handle<reco::MuonCollection> muonCollectionHandle, edm::Handle<reco::GenParticleCollection> genParticleHandle, edm::Handle<reco::GenParticleMatch> genParticleMatchHandle, double lower_energy_threshold, TH1D* histogram, const edm::Event& iEvent);
+      
+    //  PropagateToMuon propagatorToMuon;
+      // ----------member data ---------------------------
+	//TH1D* counter;
+	TH1D* counter_collection; //No of RecoMuons/GenMuons
+	TH1D* phi_ghosts; //phi direction of ghosts
+	TH1D* eta_ghosts; //eta direction of ghosts
+	TH1D* gen_ghost_energy; // Energy of the ghost producing particle
+	TH1D* muonHandleSize;
+	TH1D* eventNoCatcher;
+	TH1D* number_of_ghosts[10];
+	TH1D* gen_mu_energy;
+	//Event counter
+	int event_count;
+};
+
+//
+// constants, enums and typedefs
+//
+
+//
+// static data member definitions
+//
+
+//
+// constructors and destructor
+//
+MuonMatch::MuonMatch(const edm::ParameterSet& iConfig)
+
+{
+   //now do what ever initialization is needed
+
+}
+
+
+MuonMatch::~MuonMatch()
+{
+ 
+   // do anything here that needs to be done at desctruction time
+   // (e.g. close files, deallocate resources etc.)
+
+}
+
+
+//
+// member functions
+//
+
+// ------------ method called for each event  ------------
+void MuonMatch::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup) {
+	event_count += 1;
+	if(event_count%100000 == 0) std::cout << "Analyzing event number " << event_count << std::endl; 
+/*	edm::Handle<std::vector<reco::>> ak5GenJets; //genParticleHandle
+	iEvent.getByLabel("ak5GenJets", ak5GenJets);
+	
+	edm::Handle<edm::View<reco::PFJet> > ak5PFJets; //muonHandle
+	iEvent.getByLabel("ak5PFJetsJEC", ak5PFJets);
+	
+	edm::Handle<edm::Association<reco::GenJetCollection>> genJetMatch; //genParticleMatch
+	iEvent.getByLabel("JetGenJetMatch", genJetMatch);
+*/	
+	//MuonCollection
+	edm::Handle<edm::View<reco::Muon>> muonHandle;
+	iEvent.getByLabel("muons",muonHandle);
+	
+	edm::Handle<reco::MuonCollection> muonCollectionHandle;
+	iEvent.getByLabel("muons", muonCollectionHandle);
+	//get gen particle collection
+	edm::Handle<reco::GenParticleCollection> genParticleHandle;
+	iEvent.getByLabel("genParticles",genParticleHandle);
+
+	//Get association with genParticle matches
+	edm::Handle<reco::GenParticleMatch> genParticleMatchHandle;
+	iEvent.getByLabel("muonMatch",genParticleMatchHandle);
+	//EndMuonCollection
+	
+	//edm::Handle<reco::CandMatchMap> match; //new
+	//iEvent.getByLabel("muonMatch", match); //new
+	
+	
+	for(unsigned int energy = 0; energy < 10; energy ++){
+		defineNumberOfMuonGhosts(muonHandle, muonCollectionHandle, genParticleHandle, genParticleMatchHandle, energy*5, number_of_ghosts[energy], iEvent);
+	}
+	
+
+
+	
+
+		
+		
+		//if (mcMatch.isNonnull() && mcMatch.isAvailable()) {
+		//	reco::GenParticleCollection genparticlecollection = *(mcMatch.get());
+		//	counter_collection->Fill(genparticlecollection->size());
+		//Analyse Hier
+		//}
+	
+	
+
+	int genMuonCounter = 0;
+
+	//std::cout << genParticleHandle->size() << " Groesse" << std::endl;
+	for(unsigned int idx = 0; idx < genParticleHandle->size(); idx++){
+	//	std::cout << "Durchlauf " << idx << std::endl;
+		if (genParticleHandle->at(idx).pdgId() == 13 || genParticleHandle->at(idx).pdgId() == -13) {
+			genMuonCounter = genMuonCounter+1;
+			genMuEnergy->Fill(genParticleHandle->at(idx).energy());
+		}
+	}
+	//std::cout << "GenMuonCounter: " << genMuonCounter << std::endl;
+	counter_collection->Fill(1.*muonHandle->size()/genMuonCounter);
+}
+
+// ------------ method called once each job just before starting event loop  ------------
+void 
+MuonMatch::beginJob() {
+	edm::Service<TFileService> fs;
+
+	const double PI  = 3.141592653589793238462;
+
+	//counter = fs->make<TH1D>("counter","counter", 10, 0, 9);
+	counter_collection = fs->make<TH1D>("counter_collection", "counter_collection", 100, 0, 2);
+	eta_ghosts = fs->make<TH1D>("Eta distribution of ghosts", "Eta distribution of ghosts", 2000, 0, 2.5);
+	phi_ghosts = fs->make<TH1D>("Phi distribution of ghosts", "Phi distribution of ghosts", 192, -1*PI, PI);
+	gen_ghost_energy = fs->make<TH1D>("Energy of the ghost produciong particle", "Energy of the ghost producing particle", 5000, 0, 4999);
+	gen_mu_energy = fs->make<TH1D>("Energy of the generated mu", "Energy of the generated mu", 5000, 0, 4999);
+	eventNoCatcher = fs->make<TH1D>("EventNoCatcher","EventNoCatcher", 10000000, 0, 9999999);
+	number_of_ghosts[0] = fs->make<TH1D>("Number of ghosts, pt_min = 0 GeV","Number of ghosts, pt_min = 0 GeV", 4, 0.5, 3.5);
+	number_of_ghosts[1] = fs->make<TH1D>("Number of ghosts, pt_min = 5 GeV","Number of ghosts, pt_min = 5 GeV", 4, 0.5, 3.5);
+	number_of_ghosts[2] = fs->make<TH1D>("Number of ghosts, pt_min = 10 GeV","Number of ghosts, pt_min = 10 GeV", 4, 0.5, 3.5);
+	number_of_ghosts[3] = fs->make<TH1D>("Number of ghosts, pt_min = 15 GeV","Number of ghosts, pt_min = 15 GeV", 4, 0.5, 3.5);
+	number_of_ghosts[4] = fs->make<TH1D>("Number of ghosts, pt_min = 20 GeV","Number of ghosts, pt_min = 20 GeV", 4, 0.5, 3.5);
+	number_of_ghosts[5] = fs->make<TH1D>("Number of ghosts, pt_min = 25 GeV","Number of ghosts, pt_min = 25 GeV", 4, 0.5, 3.5);
+	number_of_ghosts[6] = fs->make<TH1D>("Number of ghosts, pt_min = 30 GeV","Number of ghosts, pt_min = 30 GeV", 4, 0.5, 3.5);
+	number_of_ghosts[7] = fs->make<TH1D>("Number of ghosts, pt_min = 35 GeV","Number of ghosts, pt_min = 35 GeV", 4, 0.5, 3.5);
+	number_of_ghosts[8] = fs->make<TH1D>("Number of ghosts, pt_min = 40 GeV","Number of ghosts, pt_min = 40 GeV", 4, 0.5, 3.5);
+	number_of_ghosts[9] = fs->make<TH1D>("Number of ghosts, pt_min = 45 GeV","Number of ghosts, pt_min = 45 GeV", 4, 0.5, 3.5);
+
+	event_count = 0;
+}
+
+//--- determines the number of muon ghosts in all events with a certain energy cut
+void
+MuonMatch::defineNumberOfMuonGhosts(edm::Handle<edm::View<reco::Muon>> muonHandle, edm::Handle<reco::MuonCollection> muonCollectionHandle, edm::Handle<reco::GenParticleCollection> genParticleHandle, edm::Handle<reco::GenParticleMatch> genParticleMatchHandle, double lower_energy_threshold, TH1D* histogram, const edm::Event& iEvent){
+	std::vector<reco::GenParticle> processed_particles;
+	int count_barrel = 0; // counts the number of ghosts in the barrel region
+	int count_endcap = 0; // counts the number of ghosts in the endcap region
+	for (unsigned int idx = 0; idx < muonHandle->size(); idx++) { // loop over all reco muons and find identical corresponding genParticles
+		
+		edm::RefToBase<reco::Muon> muonRef = muonHandle->refAt(idx);
+		reco::Muon amuon(*(muonRef.get())); //RecoMuon in Variable amuon
+		
+		reco::GenParticleRef genparticleref = (*genParticleMatchHandle)[muonRef];
+		reco::MuonRef ref_muon = muonRef.castTo<reco::MuonRef>();
+		if (genparticleref.isNonnull() && genparticleref.isAvailable() && (amuon.isStandAloneMuon() || amuon.isGlobalMuon())) {
+			const reco::GenParticle genparticle = *(genparticleref.get());
+
+			if(genparticle.pdgId() != amuon.pdgId()){
+				edm::LogInfo ("PdgId not fitting") << "Gen ID: " << genparticle.pdgId() << " Reco ID: " << amuon.pdgId() << " With energy > " << lower_energy_threshold << " GeV in LumiBlock: " << iEvent.id().luminosityBlock() << " Event No: " << iEvent.id().event();
+			}
+			
+			count_barrel = 0;
+			count_endcap = 0;
+			for(unsigned int jdx = 0; jdx < processed_particles.size(); jdx++){
+				reco::GenParticle gp = processed_particles.at(jdx);
+				if(equalsGenParticles(gp, genparticle)){
+					if(amuon.pt() > lower_energy_threshold){
+						if(amuon.eta()<1.24 && amuon.eta()>-1.24) count_barrel++;
+						else count_endcap++;
+					}
+					if(lower_energy_threshold==0){ //nur bei dem ersten durchgang auffüllen
+						phi_ghosts->Fill(amuon.phi());
+						eta_ghosts->Fill(amuon.eta());
+						gen_ghost_energy->Fill(genparticle.energy());
+					}
+		//			std::cout << "Particles are equal: " << count << std::endl;
+				}
+			}
+			processed_particles.push_back(genparticle);
+		}
+	}
+	if(count_barrel > 0){
+					//std::cout << "Found " << count << " Ghosts with energy > " << lower_energy_threshold << " GeV in LumiBlock: " << iEvent.id().luminosityBlock() << " Event No: " << iEvent.id().event() << std::endl;
+				edm::LogInfo ("Ghost_found_barrel") << "Found " << count_barrel << " Ghosts in barrel region with energy > " << lower_energy_threshold << " GeV in LumiBlock: " << iEvent.id().luminosityBlock() << " Event No: " << iEvent.id().event();
+	}
+	if(count_endcap > 0){
+					//std::cout << "Found " << count << " Ghosts with energy > " << lower_energy_threshold << " GeV in LumiBlock: " << iEvent.id().luminosityBlock() << " Event No: " << iEvent.id().event() << std::endl;
+				edm::LogInfo ("Ghost_found_endcap") << "Found " << count_endcap << " Ghosts in endcap region with energy > " << lower_energy_threshold << " GeV in LumiBlock: " << iEvent.id().luminosityBlock() << " Event No: " << iEvent.id().event();
+	}
+	histogram->Fill(count_barrel);
+}	
+
+
+
+
+
+
+
+
+
+
+			//edm::OwnVector<reco::Candidate> ownVector(); //new
+			//ownVector.pushBack(&amuon); //new
+			//edm::Ref<edm::OwnVector<reco::Candidate>> refOwnVector(ownVector, muonRef.key()); //new
+			
+			//reco::CandMatchMap::const_iterator i = match->find(refOwnVector); //new
+			//counter_collection->Fill(match->numberOfAssociations(muonRef.castTo())); //new
+				//reco::CandidateRef mcMatch = (*match)[muonRef]; //new
+
+
+
+
+// ------------ method called once each job just after ending the event loop  ------------
+void 
+MuonMatch::endJob() 
+{
+}
+
+//Checks if the GenParticles are equal in condition of charge, p_t
+bool
+MuonMatch::equalsGenParticles(reco::GenParticle gp1, reco::GenParticle gp2){
+	if(gp1.pt() != gp2.pt()){
+		//counter->Fill(gp1.pt()/gp2.pt());
+	//	std::cout << "Pt is different" << std::endl;
+		return false;
+	}
+	if(gp1.charge() != gp2.charge()){
+	//	std::cout << "Charge is different" << std::endl;
+		return false;
+	}
+	return true;
+}
+
+// ------------ method called when starting to processes a run  ------------
+void 
+MuonMatch::beginRun(edm::Run const&, edm::EventSetup const& iSetup)
+{
+	//propagatorToMuon.init(iSetup);
+}
+
+// ------------ method called when ending the processing of a run  ------------
+void 
+MuonMatch::endRun(edm::Run const&, edm::EventSetup const&)
+{
+}
+
+// ------------ method called when starting to processes a luminosity block  ------------
+void 
+MuonMatch::beginLuminosityBlock(edm::LuminosityBlock const&, edm::EventSetup const&)
+{
+}
+
+// ------------ method called when ending the processing of a luminosity block  ------------
+void 
+MuonMatch::endLuminosityBlock(edm::LuminosityBlock const&, edm::EventSetup const&)
+{
+}
+
+// ------------ method fills 'descriptions' with the allowed parameters for the module  ------------
+void
+MuonMatch::fillDescriptions(edm::ConfigurationDescriptions& descriptions) {
+  //The following says we do not know what parameters are allowed so do no validation
+  // Please change this to state exactly what you do use, even if it is no parameters
+  edm::ParameterSetDescription desc;
+  desc.setUnknown();
+  descriptions.addDefault(desc);
+}
+
+//define this as a plug-in
+DEFINE_FWK_MODULE(MuonMatch);

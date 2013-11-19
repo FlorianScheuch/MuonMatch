@@ -1,0 +1,15 @@
+[CMSSW]
+total_number_of_events  = 10
+number_of_jobs          = 5
+pset                    = tutorial.py
+datasetpath             =  /RelValZMM/CMSSW_5_3_6-START53_V14-v2/GEN-SIM-RECO
+
+[USER]
+return_data             = 1
+copy_data               = 1
+storage_element        = T2_IT_Legnaro
+user_remote_dir         = TutGridSchool
+
+[CRAB]
+scheduler = remoteGlidein
+jobtype                 = cmssw
