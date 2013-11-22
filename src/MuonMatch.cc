@@ -93,6 +93,8 @@ class MuonMatch : public edm::EDAnalyzer {
 	TH1D* number_of_ghosts_barrel[10];
 	TH1D* number_of_ghosts_endcap[10];
 	TH1D* gen_mu_energy;
+
+	TH1D* muonState;
 	//Event counter
 	int event_count;
 };
@@ -189,6 +191,7 @@ void MuonMatch::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
 			gen_mu_energy->Fill(genParticleHandle->at(idx).energy());
 			phi_gen->Fill(genParticleHandle->at(idx).phi());
 			eta_gen->Fill(genParticleHandle->at(idx).eta());
+			muonState->Fill(genParticleHandle->at(idx).status());
 		}
 	}
 	//std::cout << "GenMuonCounter: " << genMuonCounter << std::endl;
@@ -206,6 +209,7 @@ MuonMatch::beginJob() {
 
 	const double PI  = 3.141592653589793238462;
 
+	muonState = fs->make<TH1D>("GenMuon state", "GenMuon state", 4, 0, 3);
 	//counter = fs->make<TH1D>("counter","counter", 10, 0, 9);
 	counter_collection = fs->make<TH1D>("counter_collection", "counter_collection", 100, 0, 2);
 	eta_ghosts = fs->make<TH1D>("Eta distribution of ghosts", "Eta distribution of ghosts", 2000, 0, 2.5);
@@ -248,6 +252,8 @@ MuonMatch::beginJob() {
 	number_of_ghosts_endcap[8] = dir_number_of_ghosts_endcap.make<TH1D>("Number of ghosts in endcap region, pt_min = 40 GeV","Number of ghosts (endcap), pt_min = 40 GeV", 4, -0.5, 3.5);
 	number_of_ghosts_endcap[9] = dir_number_of_ghosts_endcap.make<TH1D>("Number of ghosts in endcap region, pt_min = 45 GeV","Number of ghosts (endcap), pt_min = 45 GeV", 4, -0.5, 3.5);
 	
+	
+
 	event_count = 0;
 }
 
@@ -262,33 +268,40 @@ MuonMatch::defineNumberOfMuonGhosts(edm::Handle<edm::View<reco::Muon>> muonHandl
 		edm::RefToBase<reco::Muon> muonRef = muonHandle->refAt(idx);
 		reco::Muon amuon(*(muonRef.get())); //RecoMuon in Variable amuon
 		
-		reco::GenParticleRef genparticleref = (*genParticleMatchHandle)[muonRef];
-		reco::MuonRef ref_muon = muonRef.castTo<reco::MuonRef>();
-		if (genparticleref.isNonnull() && genparticleref.isAvailable() && (amuon.isStandAloneMuon() || amuon.isGlobalMuon())) {
-			const reco::GenParticle genparticle = *(genparticleref.get());
+		//if(amuon.status() == 3){ // Muon ist im final state
 
-			if(genparticle.pdgId() != amuon.pdgId()){
-				edm::LogInfo ("PdgId not fitting") << "Gen ID: " << genparticle.pdgId() << " Reco ID: " << amuon.pdgId() << " With energy > " << lower_energy_threshold << " GeV in LumiBlock: " << iEvent.id().luminosityBlock() << " Event No: " << iEvent.id().event();
-			}
-			
-			count_barrel = 0;
-			count_endcap = 0;
-			for(unsigned int jdx = 0; jdx < processed_particles.size(); jdx++){
-				reco::GenParticle gp = processed_particles.at(jdx);
-				if(equalsGenParticles(gp, genparticle)){
-					if(amuon.pt() > lower_energy_threshold){
-						if(amuon.eta()<1.24 && amuon.eta()>-1.24) count_barrel++;
-						else count_endcap++;
-					}
-					if(lower_energy_threshold==0 && amuon.pt() > lower_energy_threshold){ //nur bei dem ersten durchgang auffüllen
-						phi_ghosts->Fill(amuon.phi());
-						eta_ghosts->Fill(amuon.eta());
-						gen_ghost_energy->Fill(genparticle.energy());
-					}
-		//			std::cout << "Particles are equal: " << count << std::endl;
+			reco::GenParticleRef genparticleref = (*genParticleMatchHandle)[muonRef];
+			reco::MuonRef ref_muon = muonRef.castTo<reco::MuonRef>();
+			if (genparticleref.isNonnull() && genparticleref.isAvailable() && (amuon.isStandAloneMuon() || amuon.isGlobalMuon())) {
+				const reco::GenParticle genparticle = *(genparticleref.get());
+
+				if(genparticle.pdgId() != amuon.pdgId()){
+					edm::LogInfo ("PdgId not fitting") << "Gen ID: " << genparticle.pdgId() << " Reco ID: " << amuon.pdgId() << " With energy > " << lower_energy_threshold << " GeV in LumiBlock: " << iEvent.id().luminosityBlock() << " Event No: " << iEvent.id().event();
 				}
-			}
-			processed_particles.push_back(genparticle);
+				if(genparticle.status() == 1){			
+					count_barrel = 0;
+					count_endcap = 0;
+					for(unsigned int jdx = 0; jdx < processed_particles.size(); jdx++){
+						reco::GenParticle gp = processed_particles.at(jdx);
+						if(equalsGenParticles(gp, genparticle)){
+							if(amuon.pt() > lower_energy_threshold){
+								if(amuon.eta()<1.24 && amuon.eta()>-1.24) count_barrel++;
+								else count_endcap++;
+							}
+							if(lower_energy_threshold==0 && amuon.pt() > lower_energy_threshold){ //nur bei dem ersten durchgang auffüllen
+								phi_ghosts->Fill(amuon.phi());
+								eta_ghosts->Fill(amuon.eta());
+								gen_ghost_energy->Fill(genparticle.energy());
+							}
+			//				std::cout << "Particles are equal: " << count << std::endl;
+						}
+					}
+					processed_particles.push_back(genparticle);
+				}
+				
+			//} else { // Muon ist nicht im final state
+				
+			//}
 		}
 	}
 	if(count_barrel > 0){
