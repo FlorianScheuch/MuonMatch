@@ -20,6 +20,10 @@
 <use name="rootmath"/>
 <use name="DataFormats/ParticleFlowCandidate"/>
 <use name="DataFormats/ParticleFlowReco"/>
+<use name="L1Trigger/Skimmer"/>
+<use name="L1TriggerConfig/L1GtConfigProducers"/>
+<use name="Configuration/StandardSequences"/>
+<use name="TrackingTools/TrackAssociator"/>
 <flags EDM_PLUGIN="1"/>
 <export>
    <lib name="1"/>
